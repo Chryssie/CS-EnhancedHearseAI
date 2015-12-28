@@ -58,7 +58,9 @@ namespace EnhancedHearseAI
             if (_checkups.Count >= 20)
                 return;
 
-            if (WithinPrimaryRange(id))
+            SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
+
+            if (WithinPrimaryRange(id) && data.IsPrivateBuilding(id))
                 _checkups.Add(id);
         }
 
@@ -135,8 +137,8 @@ namespace EnhancedHearseAI
 
             if (target == 0)
             {
-                if ((current != 0 && !SkylinesOverwatch.Data.Instance.IsBuildingWithDead(current) && WithinPrimaryRange(current)) || _checkups.Count == 0)
-                    target = current;
+                if ((hearse.m_targetBuilding != 0 && WithinPrimaryRange(hearse.m_targetBuilding)) || _checkups.Count == 0)
+                    target = hearse.m_targetBuilding;
                 else
                 {
                     target = _checkups[0];
