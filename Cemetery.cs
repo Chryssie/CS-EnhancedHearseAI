@@ -58,9 +58,7 @@ namespace EnhancedHearseAI
             if (_checkups.Count >= 20)
                 return;
 
-            SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
-
-            if (WithinPrimaryRange(id) && data.IsPrivateBuilding(id))
+            if (WithinPrimaryRange(id) && SkylinesOverwatch.Data.Instance.IsPrivateBuilding(id))
                 _checkups.Add(id);
         }
 

@@ -25,6 +25,7 @@ namespace EnhancedHearseAI
         private Dictionary<ushort, Cemetery> _cemeteries;
         private Dictionary<ushort, Claimant> _master;
         private HashSet<ushort> _stopped;
+        private uint _lastProcessedFrame;
 
         protected bool IsOverwatched()
         {
@@ -111,7 +112,11 @@ namespace EnhancedHearseAI
 
                     ProcessNewPickups();
 
-                    UpdateHearses();
+                    if (!SimulationManager.instance.SimulationPaused
+                        && ((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 4) == 2 || (_lastProcessedFrame / 16 % 4) == 2))
+                    {
+                        UpdateHearses();
+                    }
 
                     /*
                     if (SimulationManager.instance.SimulationPaused)
@@ -127,6 +132,7 @@ namespace EnhancedHearseAI
                         }
                     }
                     */
+                    _lastProcessedFrame = Singleton<SimulationManager>.instance.m_currentFrameIndex;
                 }
             }
             catch (Exception e)
