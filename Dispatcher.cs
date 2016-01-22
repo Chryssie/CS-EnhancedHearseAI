@@ -250,22 +250,23 @@ namespace EnhancedHearseAI
 
                     continue;
                 }
-                else
+                if (_stopped.Contains(id))
+                {
                     _stopped.Remove(id);
-
-                if (((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 4) != 2 && (_lastProcessedFrame / 16 % 4) != 2))
-                {
-                    _updated.Remove(id);
-                    continue;
-                }
-                else if (_updated.Contains(id))
-                {
-                    continue;
                 }
                 else
                 {
-                    _updated.Add(id);
+                    if (((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 8) != 4 && (_lastProcessedFrame / 16 % 8) != 4))
+                    {
+                        _updated.Remove(id);
+                        continue;
+                    }
+                    else if (_updated.Contains(id))
+                    {
+                        continue;
+                    }
                 }
+                _updated.Add(id);
 
                 if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                     continue;
