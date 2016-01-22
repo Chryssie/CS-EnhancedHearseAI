@@ -25,6 +25,7 @@ namespace EnhancedHearseAI
         private Dictionary<ushort, Cemetery> _cemeteries;
         private Dictionary<ushort, Claimant> _master;
         private HashSet<ushort> _stopped;
+        private HashSet<ushort> _updated;
         private uint _lastProcessedFrame;
 
         protected bool IsOverwatched()
@@ -96,6 +97,7 @@ namespace EnhancedHearseAI
                     _cemeteries = new Dictionary<ushort, Cemetery>();
                     _master = new Dictionary<ushort, Claimant>();
                     _stopped = new HashSet<ushort>();
+                    _updated = new HashSet<ushort>();
 
                     _initialized = true;
 
@@ -112,8 +114,7 @@ namespace EnhancedHearseAI
 
                     ProcessNewPickups();
 
-                    if (!SimulationManager.instance.SimulationPaused
-                        && ((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 4) == 2 || (_lastProcessedFrame / 16 % 4) == 2))
+                    if (!SimulationManager.instance.SimulationPaused)
                     {
                         UpdateHearses();
                     }
@@ -251,6 +252,20 @@ namespace EnhancedHearseAI
                 }
                 else
                     _stopped.Remove(id);
+
+                if (((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 4) != 2 && (_lastProcessedFrame / 16 % 4) != 2))
+                {
+                    _updated.Remove(id);
+                    continue;
+                }
+                else if (_updated.Contains(id))
+                {
+                    continue;
+                }
+                else
+                {
+                    _updated.Add(id);
+                }
 
                 if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                     continue;
