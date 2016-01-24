@@ -17,6 +17,7 @@ namespace EnhancedHearseAI
         private Helper _helper;
 
         private string _collecting = ColossalFramework.Globalization.Locale.Get("VEHICLE_STATUS_HEARSE_COLLECT");
+        private string _returning = ColossalFramework.Globalization.Locale.Get("VEHICLE_STATUS_HEARSE_RETURN");
 
         private bool _initialized;
         private bool _baselined;
@@ -27,6 +28,8 @@ namespace EnhancedHearseAI
         private HashSet<ushort> _stopped;
         private HashSet<ushort> _updated;
         private uint _lastProcessedFrame;
+        private Dictionary<ushort, HashSet<ushort>> _oldtargets;
+        private Dictionary<ushort, ushort> _lasttargets;
 
         protected bool IsOverwatched()
         {
@@ -98,6 +101,8 @@ namespace EnhancedHearseAI
                     _master = new Dictionary<ushort, Claimant>();
                     _stopped = new HashSet<ushort>();
                     _updated = new HashSet<ushort>();
+                    _oldtargets = new Dictionary<ushort, HashSet<ushort>>();
+                    _lasttargets = new Dictionary<ushort, ushort>();
 
                     _initialized = true;
 
@@ -167,7 +172,7 @@ namespace EnhancedHearseAI
             SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
 
             foreach (ushort id in data.Cemeteries)
-                _cemeteries.Add(id, new Cemetery(id, ref _master));
+                _cemeteries.Add(id, new Cemetery(id, ref _master, ref _oldtargets));
 
             foreach (ushort pickup in data.BuildingsWithDead)
             {
@@ -190,7 +195,7 @@ namespace EnhancedHearseAI
                 if (_cemeteries.ContainsKey(x))
                     continue;
                 
-                _cemeteries.Add(x, new Cemetery(x, ref _master));
+                _cemeteries.Add(x, new Cemetery(x, ref _master, ref _oldtargets));
 
                 foreach (ushort pickup in data.BuildingsWithDead)
                     _cemeteries[x].AddPickup(pickup);
@@ -211,11 +216,14 @@ namespace EnhancedHearseAI
 
             foreach (ushort pickup in data.BuildingsUpdated)
             {
-                foreach (ushort id in _cemeteries.Keys)
+                if (data.IsBuildingWithDead(pickup))
                 {
-                    if (data.IsBuildingWithDead(pickup))
+                    foreach (ushort id in _cemeteries.Keys)
                         _cemeteries[id].AddPickup(pickup);
-                    else
+                }
+                else
+                {
+                    foreach (ushort id in _cemeteries.Keys)
                         _cemeteries[id].AddCheckup(pickup);
                 }
             }
@@ -225,14 +233,31 @@ namespace EnhancedHearseAI
         {
             SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
             Vehicle[] vehicles = Singleton<VehicleManager>.instance.m_vehicles.m_buffer;
+            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
             InstanceID instanceID = new InstanceID();
+            uint num1 = Singleton<SimulationManager>.instance.m_currentFrameIndex >> 4 & 7u;
+            uint num2 = _lastProcessedFrame >> 4 & 7u;
 
-            foreach (ushort id in data.VehiclesUpdated)
+            foreach (ushort vehicleID in data.VehiclesRemoved)
             {
-                if (!data.IsHearse(id))
+                if (!data.IsHearse(vehicleID))
                     continue;
 
-                Vehicle v = vehicles[id];
+                if (_lasttargets.ContainsKey(vehicleID) && CheckDead(_lasttargets[vehicleID]))
+                {
+                    foreach (ushort id in _cemeteries.Keys)
+                        _cemeteries[id].AddPickup(_lasttargets[vehicleID]);
+                }
+                _oldtargets.Remove(vehicleID);
+                _lasttargets.Remove(vehicleID);
+            }
+
+            foreach (ushort vehicleID in data.VehiclesUpdated)
+            {
+                if (!data.IsHearse(vehicleID))
+                    continue;
+
+                Vehicle v = vehicles[vehicleID];
 
                 /* 
                  * If a hearse is loading corpse, we will remove it from the vehicle grid,
@@ -242,43 +267,79 @@ namespace EnhancedHearseAI
                  */
                 if ((v.m_flags & Vehicle.Flags.Stopped) != Vehicle.Flags.None)
                 {                  
-                    if (!_stopped.Contains(id))
+                    if (!_stopped.Contains(vehicleID))
                     {
-                        Singleton<VehicleManager>.instance.RemoveFromGrid(id, ref vehicles[id], false);
-                        _stopped.Add(id);
+                        Singleton<VehicleManager>.instance.RemoveFromGrid(vehicleID, ref vehicles[vehicleID], false);
+                        _stopped.Add(vehicleID);
                     }
 
                     continue;
                 }
-                if (_stopped.Contains(id))
+                if (_stopped.Contains(vehicleID))
                 {
-                    _stopped.Remove(id);
+                    _stopped.Remove(vehicleID);
                 }
                 else
                 {
-                    if (((Singleton<SimulationManager>.instance.m_currentFrameIndex / 16 % 8) != 4 && (_lastProcessedFrame / 16 % 8) != 4))
+                    uint num3 = vehicleID & 7u;
+                    if (num1 != num3 && num2 != num3)
                     {
-                        _updated.Remove(id);
+                        _updated.Remove(vehicleID);
                         continue;
                     }
-                    else if (_updated.Contains(id))
+                    else if (_updated.Contains(vehicleID))
                     {
                         continue;
                     }
                 }
-                _updated.Add(id);
+                _updated.Add(vehicleID);
 
                 if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                     continue;
 
-                if (v.Info.m_vehicleAI.GetLocalizedStatus(id, ref v, out instanceID) != _collecting) 
+                string localizedStatus = v.Info.m_vehicleAI.GetLocalizedStatus(vehicleID, ref v, out instanceID);
+
+                if (localizedStatus == _returning && _lasttargets.ContainsKey(vehicleID))
+                {
+                    if (CheckDead(_lasttargets[vehicleID]))
+                    {
+                        foreach (ushort id in _cemeteries.Keys)
+                            _cemeteries[id].AddPickup(_lasttargets[vehicleID]);
+                    }
+                    _lasttargets.Remove(vehicleID);
                     continue;
-                
-                ushort target = _cemeteries[v.m_sourceBuilding].AssignTarget(id);
+                }
+                if (localizedStatus != _collecting) 
+                    continue;
+
+                if (_lasttargets.ContainsKey(vehicleID) && _lasttargets[vehicleID] != v.m_targetBuilding)
+                {
+                    _oldtargets.Remove(vehicleID);
+                }
+                ushort target = _cemeteries[v.m_sourceBuilding].AssignTarget(vehicleID);
+                _lasttargets[vehicleID] = target;
 
                 if (target != 0 && target != v.m_targetBuilding)
-                    v.Info.m_vehicleAI.SetTarget(id, ref vehicles[id], target);
+                {
+                    if (CheckDead(v.m_targetBuilding)) 
+                    {
+                        foreach (ushort id in _cemeteries.Keys)
+                            _cemeteries[id].AddPickup(v.m_targetBuilding);
+
+                        if (!_oldtargets.ContainsKey(vehicleID))
+                            _oldtargets.Add(vehicleID, new HashSet<ushort>());
+                        _oldtargets[vehicleID].Add(v.m_targetBuilding);
+                    }
+
+                    v.Info.m_vehicleAI.SetTarget(vehicleID, ref vehicles[vehicleID], target);
+                }
             }
+        }
+
+        private bool CheckDead(ushort buildingID)
+        {
+            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
+            return buildings[buildingID].m_deathProblemTimer > 0;
         }
     }
 }

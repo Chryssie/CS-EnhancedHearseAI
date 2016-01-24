@@ -28,8 +28,9 @@ namespace EnhancedHearseAI
         private HashSet<ushort> _primary;
         private HashSet<ushort> _secondary;
         private List<ushort> _checkups;
+        private Dictionary<ushort, HashSet<ushort>> _oldtargets;
 
-        public Cemetery(ushort id, ref Dictionary<ushort, Claimant> master)
+        public Cemetery(ushort id, ref Dictionary<ushort, Claimant> master, ref Dictionary<ushort, HashSet<ushort>> oldtargets)
         {
             _id = id;
 
@@ -37,6 +38,7 @@ namespace EnhancedHearseAI
             _primary = new HashSet<ushort>();
             _secondary = new HashSet<ushort>();
             _checkups = new List<ushort>();
+            _oldtargets = oldtargets;
         }
 
         public void AddPickup(ushort id)
@@ -135,6 +137,8 @@ namespace EnhancedHearseAI
 
             if (target == 0)
             {
+                _oldtargets.Remove(hearseID);
+
                 if ((hearse.m_targetBuilding != 0 && WithinPrimaryRange(hearse.m_targetBuilding)) || _checkups.Count == 0)
                     target = hearse.m_targetBuilding;
                 else
@@ -275,7 +279,10 @@ namespace EnhancedHearseAI
             {
                 if (target == id)
                     continue;
-                
+
+                if (_oldtargets.ContainsKey(hearseID) && _oldtargets[hearseID].Contains(id))
+                    continue;
+
                 if (!SkylinesOverwatch.Data.Instance.IsBuildingWithDead(id))
                 {
                     removals.Add(id);
