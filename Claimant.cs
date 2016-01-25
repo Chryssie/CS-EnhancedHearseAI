@@ -1,13 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-
-using ICities;
-using ColossalFramework;
-using ColossalFramework.Math;
-using ColossalFramework.Plugins;
-using ColossalFramework.UI;
-using UnityEngine;
+﻿using ColossalFramework;
+using System;
 
 namespace EnhancedHearseAI
 {
@@ -48,14 +40,14 @@ namespace EnhancedHearseAI
 
             _lastUpdated = SimulationManager.instance.m_currentGameTime;
 
-            if (!SkylinesOverwatch.Data.Instance.IsHearse(_id) || !SkylinesOverwatch.Data.Instance.IsBuildingWithDead(_target)) 
+            Building b = Singleton<BuildingManager>.instance.m_buildings.m_buffer[_target];
+            if (!SkylinesOverwatch.Data.Instance.IsHearse(_id) || b.m_deathProblemTimer <= 0) 
             {
                 _distance = float.PositiveInfinity;
                 return;
             }
 
             Vehicle v = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[_id];
-            Building b = Singleton<BuildingManager>.instance.m_buildings.m_buffer[_target];
 
             _distance = (b.m_position - v.GetLastFramePosition()).sqrMagnitude;
 

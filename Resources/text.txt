@@ -1,0 +1,2 @@
+﻿Settings Settings
+PrioritizeTargetWithRedSigns Hearses prioritize the corpses with the red signs for pickup

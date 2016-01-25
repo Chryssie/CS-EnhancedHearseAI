@@ -1,12 +1,6 @@
-﻿using System;
+﻿using ColossalFramework;
+using System;
 using System.Collections.Generic;
-using System.Threading;
-
-using ICities;
-using ColossalFramework;
-using ColossalFramework.Math;
-using ColossalFramework.Plugins;
-using ColossalFramework.UI;
 using UnityEngine;
 
 namespace EnhancedHearseAI
@@ -98,7 +92,7 @@ namespace EnhancedHearseAI
             return distance <= range;
         }
 
-        public ushort AssignTarget(ushort hearseID)
+        public ushort AssignTarget(ushort hearseID, bool departure)
         {
             Vehicle hearse = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[hearseID];
             ushort target = 0;
@@ -108,7 +102,8 @@ namespace EnhancedHearseAI
 
             ushort current = hearse.m_targetBuilding;
 
-            if (!SkylinesOverwatch.Data.Instance.IsBuildingWithDead(current))
+            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
+            if (buildings[current].m_deathProblemTimer <= 0)
             {
                 _master.Remove(current);
                 _primary.Remove(current);
@@ -122,7 +117,7 @@ namespace EnhancedHearseAI
                     current = 0;
             }
 
-            bool immediateOnly = _primary.Contains(current) || _secondary.Contains(current);
+            bool immediateOnly = !departure && (_primary.Contains(current) || _secondary.Contains(current));
             SearchDirection immediateDirection = GetImmediateSearchDirection(hearseID);
 
             if (immediateOnly && immediateDirection == SearchDirection.None)
@@ -245,7 +240,7 @@ namespace EnhancedHearseAI
             if (_master.ContainsKey(target) && _master[target].IsValid && _master[target].Hearse != hearseID)
                 target = 0;
             
-            bool targetProblematic = false;
+            int targetProblematicLevel = 0;
             float distance = float.PositiveInfinity;
 
             Vector3 velocity = hearse.GetLastFrameVelocity();
@@ -263,7 +258,17 @@ namespace EnhancedHearseAI
                 }
                 else
                 {
-                    targetProblematic = (buildings[target].m_problems & Notification.Problem.Death) != Notification.Problem.None;
+                    if ((buildings[target].m_problems & Notification.Problem.Death) != Notification.Problem.None)
+                    {
+                        if (Identity.ModConf.PrioritizeTargetWithRedSigns && (buildings[target].m_problems & Notification.Problem.MajorProblem) != Notification.Problem.None)
+                        {
+                            targetProblematicLevel = 2;
+                        }
+                        else
+                        {
+                            targetProblematicLevel = 1;
+                        }
+                    }
 
                     Vector3 a = buildings[target].m_position;
 
@@ -295,7 +300,18 @@ namespace EnhancedHearseAI
                 Vector3 p = buildings[id].m_position;
                 float d = (p - position).sqrMagnitude;
 
-                bool candidateProblematic = (buildings[id].m_problems & Notification.Problem.Death) != Notification.Problem.None;
+                int candidateProblematicLevel = 0;
+                if ((buildings[id].m_problems & Notification.Problem.Death) != Notification.Problem.None)
+                {
+                    if (Identity.ModConf.PrioritizeTargetWithRedSigns && (buildings[id].m_problems & Notification.Problem.MajorProblem) != Notification.Problem.None)
+                    {
+                        candidateProblematicLevel = 2;
+                    }
+                    else
+                    {
+                        candidateProblematicLevel = 1;
+                    }
+                }
 
                 double angle = Helper.GetAngleDifference(facing, Math.Atan2(p.z - position.z, p.x - position.x));
 
@@ -328,11 +344,11 @@ namespace EnhancedHearseAI
                 {
                     if (immediateOnly && !isImmediate)
                         continue;
-                    
-                    if (targetProblematic && !candidateProblematic)
+
+                    if (targetProblematicLevel > candidateProblematicLevel)
                         continue;
 
-                    if (!targetProblematic && candidateProblematic)
+                    if (targetProblematicLevel < candidateProblematicLevel)
                     {
                         // No additonal conditions at the moment. Problematic buildings always have priority over nonproblematic buildings
                     }
@@ -368,7 +384,7 @@ namespace EnhancedHearseAI
                 }
 
                 target = id;
-                targetProblematic = candidateProblematic;
+                targetProblematicLevel = candidateProblematicLevel;
                 distance = d;
             }
 

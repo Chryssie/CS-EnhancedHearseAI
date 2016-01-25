@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-
-using ICities;
-using ColossalFramework;
-using ColossalFramework.Math;
+﻿using ColossalFramework;
 using ColossalFramework.Plugins;
-using ColossalFramework.UI;
-using UnityEngine;
+using ICities;
+using System;
+using System.Collections.Generic;
 
 namespace EnhancedHearseAI
 {
@@ -15,9 +10,6 @@ namespace EnhancedHearseAI
     {
         private Settings _settings;
         private Helper _helper;
-
-        private string _collecting = ColossalFramework.Globalization.Locale.Get("VEHICLE_STATUS_HEARSE_COLLECT");
-        private string _returning = ColossalFramework.Globalization.Locale.Get("VEHICLE_STATUS_HEARSE_RETURN");
 
         private bool _initialized;
         private bool _baselined;
@@ -234,7 +226,6 @@ namespace EnhancedHearseAI
             SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
             Vehicle[] vehicles = Singleton<VehicleManager>.instance.m_vehicles.m_buffer;
             Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
-            InstanceID instanceID = new InstanceID();
             uint num1 = Singleton<SimulationManager>.instance.m_currentFrameIndex >> 4 & 7u;
             uint num2 = _lastProcessedFrame >> 4 & 7u;
 
@@ -243,7 +234,7 @@ namespace EnhancedHearseAI
                 if (!data.IsHearse(vehicleID))
                     continue;
 
-                if (_lasttargets.ContainsKey(vehicleID) && CheckDead(_lasttargets[vehicleID]))
+                if (_lasttargets.ContainsKey(vehicleID) && buildings[_lasttargets[vehicleID]].m_deathProblemTimer > 0)
                 {
                     foreach (ushort id in _cemeteries.Keys)
                         _cemeteries[id].AddPickup(_lasttargets[vehicleID]);
@@ -297,11 +288,11 @@ namespace EnhancedHearseAI
                 if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                     continue;
 
-                string localizedStatus = v.Info.m_vehicleAI.GetLocalizedStatus(vehicleID, ref v, out instanceID);
+                int hearseStatus = GetHearseStatus(ref v);
 
-                if (localizedStatus == _returning && _lasttargets.ContainsKey(vehicleID))
+                if (hearseStatus == VEHICLE_STATUS_HEARSE_RETURN && _lasttargets.ContainsKey(vehicleID))
                 {
-                    if (CheckDead(_lasttargets[vehicleID]))
+                    if (buildings[_lasttargets[vehicleID]].m_deathProblemTimer > 0)
                     {
                         foreach (ushort id in _cemeteries.Keys)
                             _cemeteries[id].AddPickup(_lasttargets[vehicleID]);
@@ -309,19 +300,19 @@ namespace EnhancedHearseAI
                     _lasttargets.Remove(vehicleID);
                     continue;
                 }
-                if (localizedStatus != _collecting) 
+                if (hearseStatus != VEHICLE_STATUS_HEARSE_COLLECT) 
                     continue;
 
                 if (_lasttargets.ContainsKey(vehicleID) && _lasttargets[vehicleID] != v.m_targetBuilding)
                 {
                     _oldtargets.Remove(vehicleID);
                 }
-                ushort target = _cemeteries[v.m_sourceBuilding].AssignTarget(vehicleID);
+                ushort target = _cemeteries[v.m_sourceBuilding].AssignTarget(vehicleID, !_lasttargets.ContainsKey(vehicleID) || _lasttargets[vehicleID] != v.m_targetBuilding);
                 _lasttargets[vehicleID] = target;
 
                 if (target != 0 && target != v.m_targetBuilding)
                 {
-                    if (CheckDead(v.m_targetBuilding)) 
+                    if (buildings[v.m_targetBuilding].m_deathProblemTimer > 0) 
                     {
                         foreach (ushort id in _cemeteries.Keys)
                             _cemeteries[id].AddPickup(v.m_targetBuilding);
@@ -336,10 +327,46 @@ namespace EnhancedHearseAI
             }
         }
 
-        private bool CheckDead(ushort buildingID)
+        const int VEHICLE_STATUS_HEARSE_WAIT = 0;
+        const int VEHICLE_STATUS_HEARSE_RETURN = 0;
+        const int VEHICLE_STATUS_HEARSE_COLLECT = 0;
+        const int VEHICLE_STATUS_HEARSE_UNLOAD = 0;
+        const int VEHICLE_STATUS_HEARSE_TRANSFER = 0;
+        const int VEHICLE_STATUS_CONFUSED = 0;
+
+        private int GetHearseStatus(ref Vehicle data)
         {
-            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
-            return buildings[buildingID].m_deathProblemTimer > 0;
+            if ((data.m_flags & Vehicle.Flags.TransferToSource) != Vehicle.Flags.None)
+            {
+                if ((data.m_flags & (Vehicle.Flags.Stopped | Vehicle.Flags.WaitingTarget)) != Vehicle.Flags.None)
+                {
+                    return VEHICLE_STATUS_HEARSE_WAIT;
+                }
+                if ((data.m_flags & Vehicle.Flags.GoingBack) != Vehicle.Flags.None)
+                {
+                    return VEHICLE_STATUS_HEARSE_RETURN;
+                }
+                if (data.m_targetBuilding != 0)
+                {
+                    return VEHICLE_STATUS_HEARSE_COLLECT;
+                }
+            }
+            else if ((data.m_flags & Vehicle.Flags.TransferToTarget) != Vehicle.Flags.None)
+            {
+                if ((data.m_flags & Vehicle.Flags.GoingBack) != Vehicle.Flags.None)
+                {
+                    return VEHICLE_STATUS_HEARSE_RETURN;
+                }
+                if ((data.m_flags & Vehicle.Flags.WaitingTarget) != Vehicle.Flags.None)
+                {
+                    return VEHICLE_STATUS_HEARSE_UNLOAD;
+                }
+                if (data.m_targetBuilding != 0)
+                {;
+                    return VEHICLE_STATUS_HEARSE_TRANSFER;
+                }
+            }
+            return VEHICLE_STATUS_CONFUSED;
         }
     }
 }
