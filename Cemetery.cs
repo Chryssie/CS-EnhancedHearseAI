@@ -285,9 +285,6 @@ namespace EnhancedHearseAI
                 if (target == id)
                     continue;
 
-                if (_oldtargets.ContainsKey(hearseID) && _oldtargets[hearseID].Contains(id))
-                    continue;
-
                 if (!SkylinesOverwatch.Data.Instance.IsBuildingWithDead(id))
                 {
                     removals.Add(id);
@@ -313,11 +310,7 @@ namespace EnhancedHearseAI
                     }
                 }
 
-                double angle = Helper.GetAngleDifference(facing, Math.Atan2(p.z - position.z, p.x - position.x));
-
-                bool isImmediate = IsImmediate(d, angle, immediateDirection);
-
-                #region debug
+#if DEBUG
 
                 string bname = Singleton<BuildingManager>.instance.GetBuildingName(id, new InstanceID { Building = id });
                 string vname = Singleton<VehicleManager>.instance.GetVehicleName(hearseID);
@@ -327,7 +320,7 @@ namespace EnhancedHearseAI
                     Helper.Instance.NotifyPlayer(String.Format("{0} :: {1} :: {2} :: {3}", d, angle, immediateDirection, isImmediate));
                 }
 
-                #endregion
+#endif
 
                 if (_master.ContainsKey(id) && _master[id].IsValid && _master[id].IsChallengable)
                 {
@@ -337,12 +330,25 @@ namespace EnhancedHearseAI
                     if (d > _master[id].Distance)
                         continue;
 
-                    if (!isImmediate)
+                    double angle = Helper.GetAngleDifference(facing, Math.Atan2(p.z - position.z, p.x - position.x));
+
+                    int immediateLevel = GetImmediateLevel(d, angle, immediateDirection);
+
+                    if (immediateLevel == 0)
+                        continue;
+
+                    if (_oldtargets.ContainsKey(hearseID) && _oldtargets[hearseID].Contains(id) && immediateLevel < 2)
                         continue;
                 }
                 else
                 {
-                    if (immediateOnly && !isImmediate)
+                    double angle = Helper.GetAngleDifference(facing, Math.Atan2(p.z - position.z, p.x - position.x));
+                    int immediateLevel = GetImmediateLevel(d, angle, immediateDirection);
+
+                    if (immediateOnly && immediateLevel == 0)
+                        continue;
+
+                    if (_oldtargets.ContainsKey(hearseID) && _oldtargets[hearseID].Contains(id) && immediateLevel < 2)
                         continue;
 
                     if (targetProblematicLevel > candidateProblematicLevel)
@@ -357,7 +363,7 @@ namespace EnhancedHearseAI
                         if (d > distance)
                             continue;
 
-                        if (isImmediate)
+                        if (immediateLevel > 0)
                         {
                             // If it's that close, no need to further qualify its priority
                         }
@@ -397,7 +403,7 @@ namespace EnhancedHearseAI
             return target;
         }
 
-        private bool IsImmediate(float distance, double angle, SearchDirection immediateDirection)
+        private int GetImmediateLevel(float distance, double angle, SearchDirection immediateDirection)
         {
             // -90 degrees to 90 degrees. This is the default search angle
             double l = -1.5707963267948966;
@@ -408,17 +414,16 @@ namespace EnhancedHearseAI
                 // Prevent searching on the non-neighboring side
                 if ((immediateDirection & SearchDirection.Left) == SearchDirection.None)    l = 0;
                 if ((immediateDirection & SearchDirection.Right) == SearchDirection.None)   r = 0;
+                if (l <= angle && angle <= r) return 2;
             }
             else if (distance < Settings.Instance.ImmediateRange2 && (immediateDirection & SearchDirection.Ahead) != SearchDirection.None)
             {
                 // Restrict the search on the non-neighboring side to 60 degrees to give enough space for merging
                 if ((immediateDirection & SearchDirection.Left) == SearchDirection.None)    l = -1.0471975512;
                 if ((immediateDirection & SearchDirection.Right) == SearchDirection.None)   r = 1.0471975512;
+                if(l <= angle && angle <= r) return 1;
             }
-            else 
-                return false;
-
-            return angle >= l && angle <= r;
+            return 0;
         }
 
         private bool IsAlongTheWay(float distance, double angle)
@@ -427,10 +432,7 @@ namespace EnhancedHearseAI
                 return false;
 
             // -90 degrees to 90 degrees. This is the default search angle
-            double l = -1.5707963267948966;
-            double r = 1.5707963267948966;
-
-            return angle >= l && angle <= r;
+            return -1.5707963267948966 <= angle && angle <= 1.5707963267948966;
         }
     }
 }

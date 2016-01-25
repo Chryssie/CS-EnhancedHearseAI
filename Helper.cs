@@ -29,8 +29,8 @@ namespace EnhancedHearseAI
 
         public static double GetAngleDifference(double a, double b)
         {
-            if (a < 0) a = Math.PI * 2 + a;
-            if (b < 0) b = Math.PI * 2 + b;
+            if (a < 0) a += Math.PI * 2;
+            if (b < 0) b += Math.PI * 2;
 
             double diff = a - b;
 
