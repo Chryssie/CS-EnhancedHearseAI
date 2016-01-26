@@ -328,11 +328,11 @@ namespace EnhancedHearseAI
         }
 
         const int VEHICLE_STATUS_HEARSE_WAIT = 0;
-        const int VEHICLE_STATUS_HEARSE_RETURN = 0;
-        const int VEHICLE_STATUS_HEARSE_COLLECT = 0;
-        const int VEHICLE_STATUS_HEARSE_UNLOAD = 0;
-        const int VEHICLE_STATUS_HEARSE_TRANSFER = 0;
-        const int VEHICLE_STATUS_CONFUSED = 0;
+        const int VEHICLE_STATUS_HEARSE_RETURN = 1;
+        const int VEHICLE_STATUS_HEARSE_COLLECT = 2;
+        const int VEHICLE_STATUS_HEARSE_UNLOAD = 3;
+        const int VEHICLE_STATUS_HEARSE_TRANSFER = 4;
+        const int VEHICLE_STATUS_CONFUSED = 5;
 
         private int GetHearseStatus(ref Vehicle data)
         {
