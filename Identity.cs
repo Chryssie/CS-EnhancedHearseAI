@@ -26,9 +26,14 @@ namespace EnhancedHearseAI
         {
             this.InitConfigFile();
             UIHelperBase group = helper.AddGroup(Translation.GetString("Settings"));
-            group.AddCheckbox(Translation.GetString("PrioritizeTargetWithRedSigns"), ModConf.PrioritizeTargetWithRedSigns, delegate (bool isChecked)
+            group.AddCheckbox(Translation.GetString("PrioritizeTargetsWithRedSigns"), ModConf.PrioritizeTargetWithRedSigns, delegate (bool isChecked)
             {
                 Identity.ModConf.PrioritizeTargetWithRedSigns = isChecked;
+                ModConfiguration.Serialize(Identity.configPath, Identity.ModConf);
+            });
+            group.AddCheckbox(Translation.GetString("MinimizeHearses"), ModConf.MinimizeHearses, delegate (bool isChecked)
+            {
+                Identity.ModConf.MinimizeHearses = isChecked;
                 ModConfiguration.Serialize(Identity.configPath, Identity.ModConf);
             });
         }

@@ -39,14 +39,13 @@ namespace EnhancedHearseAI
             if (_lastUpdated == SimulationManager.instance.m_currentGameTime) return;
 
             _lastUpdated = SimulationManager.instance.m_currentGameTime;
-
-            Building b = Singleton<BuildingManager>.instance.m_buildings.m_buffer[_target];
-            if (!SkylinesOverwatch.Data.Instance.IsHearse(_id) || b.m_deathProblemTimer <= 0) 
+            if (!SkylinesOverwatch.Data.Instance.IsHearse(_id) || !Helper.IsBuildingWithDead(_target)) 
             {
                 _distance = float.PositiveInfinity;
                 return;
             }
 
+            Building b = Singleton<BuildingManager>.instance.m_buildings.m_buffer[_target];
             Vehicle v = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[_id];
 
             _distance = (b.m_position - v.GetLastFramePosition()).sqrMagnitude;

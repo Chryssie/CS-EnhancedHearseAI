@@ -1,17 +1,12 @@
-﻿using System;
+﻿using ICities;
 using System.Collections.Generic;
-using System.Threading;
-
-using ICities;
-using ColossalFramework;
-using ColossalFramework.Math;
-using ColossalFramework.UI;
-using UnityEngine;
 
 namespace EnhancedHearseAI
 {
     public class Loader : LoadingExtensionBase
     {
+        List<RedirectCallsState> m_redirectionStates = new List<RedirectCallsState>();
+
         Helper _helper;
 
         public override void OnCreated(ILoading loading)
@@ -23,13 +18,25 @@ namespace EnhancedHearseAI
 
         public override void OnLevelLoaded(LoadMode mode)
         {
+            base.OnLevelLoaded(mode);
             if (mode == LoadMode.NewGame || mode == LoadMode.LoadGame)
+            {
+                if (Helper.IsOverwatched())
+                {
+                    RedirectionHelper.RedirectCalls(m_redirectionStates, typeof(HearseAI), typeof(CustomHearseAI), "SetTarget", 3);
+                }
                 _helper.GameLoaded = true;
+            }
         }
 
         public override void OnLevelUnloading()
         {
+            base.OnLevelUnloading();
             _helper.GameLoaded = false;
+            foreach (RedirectCallsState rcs in m_redirectionStates)
+            {
+                RedirectionHelper.RevertRedirect(rcs);
+            }
         }
     }
 }

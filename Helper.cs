@@ -1,4 +1,5 @@
-﻿using ColossalFramework.Plugins;
+﻿using ColossalFramework;
+using ColossalFramework.Plugins;
 using System;
 using UnityEngine;
 
@@ -40,6 +41,31 @@ namespace EnhancedHearseAI
                 diff += Math.PI * 2;
 
             return diff;
+        }
+
+        public static bool IsBuildingWithDead(ushort id)
+        {
+            return ((Singleton<BuildingManager>.instance.m_buildings.m_buffer[id].m_flags & (Building.Flags.Abandoned | Building.Flags.BurnedDown)) == Building.Flags.None
+                && Singleton<BuildingManager>.instance.m_buildings.m_buffer[id].m_deathProblemTimer > 0);
+        }
+
+        public static bool IsOverwatched()
+        {
+#if DEBUG
+
+            return true;
+
+#else
+
+            foreach (var plugin in PluginManager.instance.GetPluginsInfo())
+            {
+                if (plugin.name == "583538182" && plugin.publishedFileID.ToString() == "583538182")
+                    return plugin.isEnabled;
+            }
+
+            return false;
+
+#endif
         }
     }
 }

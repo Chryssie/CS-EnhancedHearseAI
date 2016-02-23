@@ -7,7 +7,7 @@ namespace EnhancedHearseAI
     {
         private Settings()
         {
-            Tag = "Enhanced Hearse AI [Fixed for v1.2+]";
+            Tag = "Enhanced Hearse AI [Fixed for v1.3+]";
 
             ImmediateRange1 = 4000;
             ImmediateRange2 = 20000;

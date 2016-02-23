@@ -6,10 +6,12 @@ namespace EnhancedHearseAI
     public class ModConfiguration
     {
         public bool PrioritizeTargetWithRedSigns;
+        public bool MinimizeHearses;
 
         public ModConfiguration()
 		{
             this.PrioritizeTargetWithRedSigns = false;
+            this.MinimizeHearses = false;
         }
 
 		public static bool Serialize(string filename, ModConfiguration config)

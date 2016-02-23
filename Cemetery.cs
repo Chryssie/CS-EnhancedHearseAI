@@ -10,23 +10,23 @@ namespace EnhancedHearseAI
         [Flags]
         private enum SearchDirection : byte
         {
-            None    = 0,
-            Ahead   = 1,
-            Left    = 2,
-            Right   = 4
+            None = 0,
+            Ahead = 1,
+            Left = 2,
+            Right = 4
         }
 
-        private readonly ushort _id;
+        private readonly ushort _buildingID;
 
         private Dictionary<ushort, Claimant> _master;
-        private HashSet<ushort> _primary;
-        private HashSet<ushort> _secondary;
-        private List<ushort> _checkups;
+        public HashSet<ushort> _primary;
+        public HashSet<ushort> _secondary;
+        public List<ushort> _checkups;
         private Dictionary<ushort, HashSet<ushort>> _oldtargets;
 
         public Cemetery(ushort id, ref Dictionary<ushort, Claimant> master, ref Dictionary<ushort, HashSet<ushort>> oldtargets)
         {
-            _id = id;
+            _buildingID = id;
 
             _master = master;
             _primary = new HashSet<ushort>();
@@ -37,9 +37,6 @@ namespace EnhancedHearseAI
 
         public void AddPickup(ushort id)
         {
-            if (!_master.ContainsKey(id))
-                _master.Add(id, new Claimant(_id, id));
-
             if (_primary.Contains(id) || _secondary.Contains(id))
                 return;
 
@@ -62,7 +59,7 @@ namespace EnhancedHearseAI
         {
             Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
 
-            Building cemetery = buildings[(int)_id];
+            Building cemetery = buildings[(int)_buildingID];
             Building target = buildings[(int)id];
 
             DistrictManager dm = Singleton<DistrictManager>.instance;
@@ -81,10 +78,10 @@ namespace EnhancedHearseAI
         {
             Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
 
-            Building cemetery = buildings[(int)_id];
+            Building cemetery = buildings[(int)_buildingID];
             Building target = buildings[(int)id];
 
-            float range = cemetery.Info.m_buildingAI.GetCurrentRange(_id, ref cemetery);
+            float range = cemetery.Info.m_buildingAI.GetCurrentRange(_buildingID, ref cemetery);
             range = range * range;
 
             float distance = (cemetery.m_position - target.m_position).sqrMagnitude;
@@ -92,19 +89,151 @@ namespace EnhancedHearseAI
             return distance <= range;
         }
 
-        public ushort AssignTarget(ushort hearseID, bool departure)
+        public void DispatchIdleVehicle()
+        {
+            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
+            Building me = buildings[_buildingID];
+
+            if ((me.m_flags & Building.Flags.Active) == Building.Flags.None && me.m_productionRate == 0) return;
+
+            if ((me.m_flags & Building.Flags.Downgrading) != Building.Flags.None) return;
+
+            if (me.Info.m_buildingAI.IsFull(_buildingID, ref buildings[_buildingID])) return;
+
+            int max = (PlayerBuildingAI.GetProductionRate(100, Singleton<EconomyManager>.instance.GetBudget(me.Info.m_class)) * ((CemeteryAI)me.Info.m_buildingAI).m_hearseCount + 99) / 100;
+
+            int now = 0;
+            VehicleManager instance = Singleton<VehicleManager>.instance;
+            ushort num = buildings[_buildingID].m_ownVehicles;
+            while (num != 0)
+            {
+                if ((TransferManager.TransferReason)instance.m_vehicles.m_buffer[(int)num].m_transferType == TransferManager.TransferReason.Dead)
+                {
+                    now++;
+                }
+                num = instance.m_vehicles.m_buffer[(int)num].m_nextOwnVehicle;
+            }
+
+            if (now + 1 >= max)
+                return;
+            ushort target = GetUnclaimedTarget();
+
+            if (target == 0)
+                return;
+
+            TransferManager.TransferOffer offer = default(TransferManager.TransferOffer);
+            offer.Building = target;
+            offer.Position = buildings[target].m_position;
+
+            me.Info.m_buildingAI.StartTransfer(
+                _buildingID,
+                ref buildings[_buildingID],
+                TransferManager.TransferReason.Dead,
+                offer
+            );
+        }
+
+        public ushort GetUnclaimedTarget(ushort truckID = 0)
+        {
+            ushort target = 0;
+
+            target = GetUnclaimedTarget(_primary, truckID);
+            if (target == 0)
+                target = GetUnclaimedTarget(_secondary, truckID);
+            if (truckID != 0 && target == 0 && _checkups.Count > 0)
+            {
+                target = _checkups[0];
+                _checkups.RemoveAt(0);
+            }
+
+            return target;
+        }
+
+        private ushort GetUnclaimedTarget(ICollection<ushort> targets, ushort truckID)
+        {
+            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
+
+            List<ushort> removals = new List<ushort>();
+
+            ushort target = 0;
+            int targetProblematicLevel = 0;
+            float distance = float.PositiveInfinity;
+
+            Building landfill = buildings[(int)_buildingID];
+            foreach (ushort id in targets)
+            {
+                if (target == id)
+                    continue;
+
+                if (_oldtargets.ContainsKey(truckID) && _oldtargets[truckID].Contains(id))
+                    continue;
+
+                if (!Helper.IsBuildingWithDead(id))
+                {
+                    removals.Add(id);
+                    continue;
+                }
+
+                Vector3 p = buildings[id].m_position;
+                float d = (p - landfill.m_position).sqrMagnitude;
+
+                int candidateProblematicLevel = 0;
+                if ((buildings[id].m_problems & Notification.Problem.Death) != Notification.Problem.None)
+                {
+                    if (Identity.ModConf.PrioritizeTargetWithRedSigns && (buildings[id].m_problems & Notification.Problem.MajorProblem) != Notification.Problem.None)
+                    {
+                        candidateProblematicLevel = 2;
+                    }
+                    else
+                    {
+                        candidateProblematicLevel = 1;
+                    }
+                }
+                if (_master.ContainsKey(id) && _master[id].IsValid)
+                {
+                    continue;
+                }
+                else
+                {
+                    if (targetProblematicLevel > candidateProblematicLevel)
+                        continue;
+
+                    if (targetProblematicLevel < candidateProblematicLevel)
+                    {
+                        // No additonal conditions at the moment. Problematic buildings always have priority over nonproblematic buildings
+                    }
+                    else
+                    {
+                        if (d > distance)
+                            continue;
+                    }
+                }
+
+                target = id;
+                targetProblematicLevel = candidateProblematicLevel;
+                distance = d;
+            }
+
+            foreach (ushort id in removals)
+            {
+                _master.Remove(id);
+                targets.Remove(id);
+            }
+            return target;
+        }
+
+        public ushort AssignTarget(ushort hearseID)
         {
             Vehicle hearse = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[hearseID];
             ushort target = 0;
 
-            if (hearse.m_sourceBuilding != _id)
+            if (hearse.m_sourceBuilding != _buildingID)
                 return target;
 
             ushort current = hearse.m_targetBuilding;
-
-            Building[] buildings = Singleton<BuildingManager>.instance.m_buildings.m_buffer;
-            if (buildings[current].m_deathProblemTimer <= 0)
+            if (!Helper.IsBuildingWithDead(current))
             {
+                _oldtargets.Remove(hearseID);
                 _master.Remove(current);
                 _primary.Remove(current);
                 _secondary.Remove(current);
@@ -113,11 +242,13 @@ namespace EnhancedHearseAI
             }
             else if (_master.ContainsKey(current))
             {
-                if (_master[current].IsValid && _master[current].Hearse != hearseID)
+                if (_master[current].Hearse != hearseID)
+                {
                     current = 0;
+                }
             }
 
-            bool immediateOnly = !departure && (_primary.Contains(current) || _secondary.Contains(current));
+            bool immediateOnly = (_primary.Contains(current) || _secondary.Contains(current));
             SearchDirection immediateDirection = GetImmediateSearchDirection(hearseID);
 
             if (immediateOnly && immediateDirection == SearchDirection.None)
@@ -142,13 +273,6 @@ namespace EnhancedHearseAI
                     _checkups.RemoveAt(0);
                 }
             }
-            else if (_master.ContainsKey(target))
-            {
-                if (_master[target].Hearse != hearseID)
-                    _master[target] = new Claimant(hearseID, target);
-            }
-            else
-                _master.Add(target, new Claimant(hearseID, target));
 
             return target;
         }
@@ -217,8 +341,8 @@ namespace EnhancedHearseAI
             {
                 dir = SearchDirection.Left | SearchDirection.Right | SearchDirection.Ahead;
             }
-            else 
-            {   
+            else
+            {
                 if (position.m_lane == leftLane)
                     dir = SearchDirection.Left | SearchDirection.Ahead;
                 else
@@ -237,10 +361,10 @@ namespace EnhancedHearseAI
             List<ushort> removals = new List<ushort>();
 
             ushort target = hearse.m_targetBuilding;
-            if (_master.ContainsKey(target) && _master[target].IsValid && _master[target].Hearse != hearseID)
+            if (_master.ContainsKey(target) && _master[target].Hearse != hearseID)
                 target = 0;
-            
             int targetProblematicLevel = 0;
+            float targetdistance = float.PositiveInfinity;
             float distance = float.PositiveInfinity;
 
             Vector3 velocity = hearse.GetLastFrameVelocity();
@@ -251,7 +375,7 @@ namespace EnhancedHearseAI
 
             if (targets.Contains(target))
             {
-                if (!SkylinesOverwatch.Data.Instance.IsBuildingWithDead(target))
+                if (!Helper.IsBuildingWithDead(target))
                 {
                     removals.Add(target);
                     target = 0;
@@ -272,7 +396,7 @@ namespace EnhancedHearseAI
 
                     Vector3 a = buildings[target].m_position;
 
-                    distance = (a - position).sqrMagnitude;
+                    targetdistance = distance = (a - position).sqrMagnitude;
 
                     bearing = Math.Atan2(a.z - position.z, a.x - position.x);
                 }
@@ -285,7 +409,7 @@ namespace EnhancedHearseAI
                 if (target == id)
                     continue;
 
-                if (!SkylinesOverwatch.Data.Instance.IsBuildingWithDead(id))
+                if (!Helper.IsBuildingWithDead(id))
                 {
                     removals.Add(id);
                     continue;
@@ -310,24 +434,15 @@ namespace EnhancedHearseAI
                     }
                 }
 
-#if DEBUG
-
-                string bname = Singleton<BuildingManager>.instance.GetBuildingName(id, new InstanceID { Building = id });
-                string vname = Singleton<VehicleManager>.instance.GetVehicleName(hearseID);
-
-                if (bname.Contains("##") && vname.Contains("##"))
-                {
-                    Helper.Instance.NotifyPlayer(String.Format("{0} :: {1} :: {2} :: {3}", d, angle, immediateDirection, isImmediate));
-                }
-
-#endif
-
                 if (_master.ContainsKey(id) && _master[id].IsValid && _master[id].IsChallengable)
                 {
+                    if (d > targetdistance * 0.9)
+                        continue;
+
                     if (d > distance)
                         continue;
 
-                    if (d > _master[id].Distance)
+                    if (d > _master[id].Distance * 0.9)
                         continue;
 
                     double angle = Helper.GetAngleDifference(facing, Math.Atan2(p.z - position.z, p.x - position.x));
@@ -360,6 +475,9 @@ namespace EnhancedHearseAI
                     }
                     else
                     {
+                        if (d > targetdistance * 0.9)
+                            continue;
+
                         if (d > distance)
                             continue;
 
@@ -373,13 +491,11 @@ namespace EnhancedHearseAI
                         }
                         else if (!double.IsPositiveInfinity(bearing))
                         {
-                            angle = Helper.GetAngleDifference(bearing, Math.Atan2(p.z - position.z, p.x - position.x));
-
-                            if (IsAlongTheWay(d, angle))
+                            if (IsAlongTheWay(d, Helper.GetAngleDifference(bearing, Math.Atan2(p.z - position.z, p.x - position.x))))
                             {
                                 // If it's in the general direction along the vehicle's target path, we will have to settle for it at this point
                             }
-                            else 
+                            else
                                 continue;
                         }
                         else
@@ -412,16 +528,16 @@ namespace EnhancedHearseAI
             if (distance < Settings.Instance.ImmediateRange1)
             {
                 // Prevent searching on the non-neighboring side
-                if ((immediateDirection & SearchDirection.Left) == SearchDirection.None)    l = 0;
-                if ((immediateDirection & SearchDirection.Right) == SearchDirection.None)   r = 0;
+                if ((immediateDirection & SearchDirection.Left) == SearchDirection.None) l = 0;
+                if ((immediateDirection & SearchDirection.Right) == SearchDirection.None) r = 0;
                 if (l <= angle && angle <= r) return 2;
             }
             else if (distance < Settings.Instance.ImmediateRange2 && (immediateDirection & SearchDirection.Ahead) != SearchDirection.None)
             {
                 // Restrict the search on the non-neighboring side to 60 degrees to give enough space for merging
-                if ((immediateDirection & SearchDirection.Left) == SearchDirection.None)    l = -1.0471975512;
-                if ((immediateDirection & SearchDirection.Right) == SearchDirection.None)   r = 1.0471975512;
-                if(l <= angle && angle <= r) return 1;
+                if ((immediateDirection & SearchDirection.Left) == SearchDirection.None) l = -1.0471975512;
+                if ((immediateDirection & SearchDirection.Right) == SearchDirection.None) r = 1.0471975512;
+                if (l <= angle && angle <= r) return 1;
             }
             return 0;
         }

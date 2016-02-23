@@ -1,2 +1,3 @@
 ﻿Settings Settings
-PrioritizeTargetWithRedSigns Hearses prioritize the corpses with the red signs for pickup
+PrioritizeTargetsWithRedSigns Hearses prioritize the corpses with the red signs for pickup
+MinimizeHearses Minimize the number of hearses (Experimental feature)

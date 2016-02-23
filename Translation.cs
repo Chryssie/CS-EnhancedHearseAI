@@ -27,9 +27,8 @@ namespace EnhancedHearseAI
                     }
                 }
                 textDictionary = new Dictionary<string, string>();
-                for (int i = 0; i < lines.Length; i++)
+                foreach (string line in lines)
                 {
-                    string line = lines[i];
                     if (line == null || line.Trim().Length == 0)
                     {
                         continue;
