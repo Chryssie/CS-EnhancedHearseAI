@@ -1,5 +1,4 @@
 ﻿using ColossalFramework;
-using ColossalFramework.Plugins;
 using ICities;
 using System;
 using System.Collections.Generic;
@@ -22,6 +21,7 @@ namespace EnhancedHearseAI
         private uint _lastProcessedFrame;
         public static Dictionary<ushort, HashSet<ushort>> _oldtargets;
         private Dictionary<ushort, ushort> _lasttargets;
+        private Dictionary<ushort, DateTime> _lastchangetimes;
         private Dictionary<ushort, ushort> _PathfindCount;
         private CustomHearseAI _CustomHearseAI;
 
@@ -78,7 +78,10 @@ namespace EnhancedHearseAI
                     _updated = new HashSet<ushort>();
                     _oldtargets = new Dictionary<ushort, HashSet<ushort>>();
                     _lasttargets = new Dictionary<ushort, ushort>();
+                    _lastchangetimes = new Dictionary<ushort, DateTime>();
                     _PathfindCount = new Dictionary<ushort, ushort>();
+
+                    RedirectionHelper.RedirectCalls(Loader.m_redirectionStates, typeof(HearseAI), typeof(CustomHearseAI), "SetTarget", 3);
 
                     _initialized = true;
 
@@ -134,7 +137,7 @@ namespace EnhancedHearseAI
             SkylinesOverwatch.Data data = SkylinesOverwatch.Data.Instance;
 
             foreach (ushort id in data.Cemeteries)
-                _cemeteries.Add(id, new Cemetery(id, ref _master, ref _oldtargets));
+                _cemeteries.Add(id, new Cemetery(id, ref _master, ref _oldtargets, ref _lastchangetimes));
 
             foreach (ushort pickup in data.BuildingsWithDead)
             {
@@ -157,7 +160,7 @@ namespace EnhancedHearseAI
                 if (_cemeteries.ContainsKey(x))
                     continue;
                 
-                _cemeteries.Add(x, new Cemetery(x, ref _master, ref _oldtargets));
+                _cemeteries.Add(x, new Cemetery(x, ref _master, ref _oldtargets, ref _lastchangetimes));
 
                 foreach (ushort pickup in data.BuildingsWithDead)
                     _cemeteries[x].AddPickup(pickup);
@@ -228,6 +231,7 @@ namespace EnhancedHearseAI
                     _master.Remove(_lasttargets[vehicleID]);
                 }
                 _lasttargets.Remove(vehicleID);
+                _lastchangetimes.Remove(vehicleID);
                 _PathfindCount.Remove(vehicleID);
             }
 
@@ -245,12 +249,6 @@ namespace EnhancedHearseAI
                     if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                         continue;
 
-                    /* 
-                     * If a hearse is loading corpse, we will remove it from the vehicle grid,
-                     * so other cars can pass it and more than one hearse can service a building.
-                     * It doesn't really make sense that only one hearse can be at a high rise
-                     * at a time.
-                     */
                     if ((v.m_flags & Vehicle.Flags.Stopped) != Vehicle.Flags.None)
                     {
                         if (!_stopped.Contains(vehicleID))
@@ -287,9 +285,9 @@ namespace EnhancedHearseAI
 
                     _updated.Add(vehicleID);
 
-                    int truckStatus = GetHearseStatus(ref v);
+                    int vehicleStatus = GetHearseStatus(ref v);
 
-                    if (truckStatus == VEHICLE_STATUS_HEARSE_RETURN && _lasttargets.ContainsKey(vehicleID))
+                    if (vehicleStatus == VEHICLE_STATUS_HEARSE_RETURN && _lasttargets.ContainsKey(vehicleID))
                     {
                         if (Helper.IsBuildingWithDead(_lasttargets[vehicleID]))
                         {
@@ -299,7 +297,7 @@ namespace EnhancedHearseAI
                         _lasttargets.Remove(vehicleID);
                         continue;
                     }
-                    if (truckStatus != VEHICLE_STATUS_HEARSE_COLLECT && truckStatus != VEHICLE_STATUS_HEARSE_WAIT)
+                    if (vehicleStatus != VEHICLE_STATUS_HEARSE_COLLECT && vehicleStatus != VEHICLE_STATUS_HEARSE_WAIT)
                         continue;
 
                     ushort target = _cemeteries[v.m_sourceBuilding].AssignTarget(vehicleID);
@@ -313,9 +311,17 @@ namespace EnhancedHearseAI
                         }
 
                         _master.Remove(v.m_targetBuilding);
-                        if (truckStatus == VEHICLE_STATUS_HEARSE_COLLECT)
+                        if (vehicleStatus == VEHICLE_STATUS_HEARSE_COLLECT)
                         {
                             _lasttargets[vehicleID] = v.m_targetBuilding;
+                            if (_lastchangetimes.ContainsKey(vehicleID))
+                            {
+                                _lastchangetimes[vehicleID] = SimulationManager.instance.m_currentGameTime;
+                            }
+                            else
+                            {
+                                _lastchangetimes.Add(vehicleID, SimulationManager.instance.m_currentGameTime);
+                            }
                         }
                         _CustomHearseAI.SetTarget(vehicleID, ref Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID], target);
                     }
@@ -323,7 +329,7 @@ namespace EnhancedHearseAI
                     {
                         if (_master.ContainsKey(v.m_targetBuilding))
                         {
-                            if (_master[v.m_targetBuilding].Hearse != vehicleID)
+                            if (_master[v.m_targetBuilding].Vehicle != vehicleID)
                                 _master[v.m_targetBuilding] = new Claimant(vehicleID, v.m_targetBuilding);
                         }
                         else
@@ -344,7 +350,7 @@ namespace EnhancedHearseAI
                     }
                     else if ((pathFindFlags & 8) != 0)
                     {
-                        int truckStatus = GetHearseStatus(ref Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID]);
+                        int vehicleStatus = GetHearseStatus(ref Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID]);
                         if (_lasttargets.ContainsKey(vehicleID))
                         {
                             Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags &= ~Vehicle.Flags.WaitingPath;
@@ -353,7 +359,7 @@ namespace EnhancedHearseAI
                             _CustomHearseAI.SetTarget(vehicleID, ref Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID], _lasttargets[vehicleID]);
                             _lasttargets.Remove(vehicleID);
                         }
-                        else if ((truckStatus == VEHICLE_STATUS_HEARSE_WAIT || truckStatus == VEHICLE_STATUS_HEARSE_COLLECT)
+                        else if ((vehicleStatus == VEHICLE_STATUS_HEARSE_WAIT || vehicleStatus == VEHICLE_STATUS_HEARSE_COLLECT)
                             && ((Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags & (Vehicle.Flags.Spawned)) != Vehicle.Flags.None)
                             && _cemeteries.ContainsKey(Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_sourceBuilding)
                             && (!_PathfindCount.ContainsKey(vehicleID) || _PathfindCount[vehicleID] < 20))

@@ -11,7 +11,7 @@ namespace EnhancedHearseAI
         private float _distance;
         private DateTime _lastUpdated;
 
-        public ushort Hearse { get { return _id; } }
+        public ushort Vehicle { get { return _id; } }
 
         public float Distance 
         { 

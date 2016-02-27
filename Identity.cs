@@ -13,7 +13,7 @@ namespace EnhancedHearseAI
 
         public string Description
         {
-            get { return "Oversees death services to ensure that hearses are dispatched in an efficient manner."; }
+            get { return "Oversees death services to ensure that vehicles are dispatched in an efficient manner."; }
         }
 
         public const string SETTINGFILENAME = "EnhancedHearseAI.xml";

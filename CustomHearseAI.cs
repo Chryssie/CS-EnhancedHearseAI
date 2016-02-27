@@ -11,23 +11,36 @@ namespace EnhancedHearseAI
     {
         public void SetTarget(ushort vehicleID, ref Vehicle data, ushort targetBuilding)
         {
-            if (Identity.ModConf.MinimizeHearses && (data.m_flags & (Vehicle.Flags.Spawned)) == Vehicle.Flags.None)
+            if ((data.m_flags & (Vehicle.Flags.Spawned)) == Vehicle.Flags.None)
             {
+                if (Identity.ModConf.MinimizeHearses)
+                {
+                    if (Dispatcher._cemeteries != null && Dispatcher._cemeteries.ContainsKey(data.m_sourceBuilding))
+                    {
+                        if (Dispatcher._cemeteries[data.m_sourceBuilding]._primary.Count > 0 || Dispatcher._cemeteries[data.m_sourceBuilding]._secondary.Count > 0 || Dispatcher._cemeteries[data.m_sourceBuilding]._checkups.Count > 0)
+                            if ((!Dispatcher._cemeteries[data.m_sourceBuilding]._primary.Contains(targetBuilding) && !Dispatcher._cemeteries[data.m_sourceBuilding]._secondary.Contains(targetBuilding)) || !Helper.IsBuildingWithDead(targetBuilding))
+                            {
+                                data.Unspawn(vehicleID);
+                                return;
+                            }
+                    }
+                    else
+                    {
+                        data.Unspawn(vehicleID);
+                        return;
+                    }
+                }
+
                 if (Dispatcher._cemeteries != null && Dispatcher._cemeteries.ContainsKey(data.m_sourceBuilding))
                 {
-                    if (Dispatcher._cemeteries[data.m_sourceBuilding]._primary.Count > 0 || Dispatcher._cemeteries[data.m_sourceBuilding]._secondary.Count > 0 || Dispatcher._cemeteries[data.m_sourceBuilding]._checkups.Count > 0)
-                        if ((!Dispatcher._cemeteries[data.m_sourceBuilding]._primary.Contains(targetBuilding) && !Dispatcher._cemeteries[data.m_sourceBuilding]._secondary.Contains(targetBuilding)) || !Helper.IsBuildingWithDead(targetBuilding))
-                        {
-                            data.Unspawn(vehicleID);
-                            return;
-                        }
-                }
-                else
-                {
-                    if (Dispatcher._cemeteries == null) Helper.Instance.NotifyPlayer("Dispatcher._cemeteries == null");
-                    if (!Dispatcher._cemeteries.ContainsKey(data.m_sourceBuilding)) Helper.Instance.NotifyPlayer("data.m_sourceBuilding:" + data.m_sourceBuilding);
-                    data.Unspawn(vehicleID);
-                    return;
+                    int max, now;
+                    Dispatcher._cemeteries[data.m_sourceBuilding].CaluculateWorkingVehicles(out max, out now);
+
+                    if (now > max)
+                    {
+                        data.Unspawn(vehicleID);
+                        return;
+                    }
                 }
             }
 
@@ -40,9 +53,9 @@ namespace EnhancedHearseAI
             byte lastPathOffset = data.m_lastPathOffset;
             ushort target = targetBuilding;
 
-            int hearseStatus = Dispatcher.GetHearseStatus(ref data);
+            int vehicleStatus = Dispatcher.GetHearseStatus(ref data);
             int retry_max = 1;
-            if (hearseStatus == Dispatcher.VEHICLE_STATUS_HEARSE_WAIT)
+            if (vehicleStatus == Dispatcher.VEHICLE_STATUS_HEARSE_WAIT)
             {
                 if (Dispatcher._oldtargets != null) Dispatcher._oldtargets.Remove(vehicleID);
                 retry_max = 20;
@@ -145,7 +158,7 @@ namespace EnhancedHearseAI
                 }
 
                 if ((targetBuilding == 0 ||
-                        (hearseStatus != Dispatcher.VEHICLE_STATUS_HEARSE_COLLECT && hearseStatus != Dispatcher.VEHICLE_STATUS_HEARSE_WAIT)))
+                        (vehicleStatus != Dispatcher.VEHICLE_STATUS_HEARSE_COLLECT && vehicleStatus != Dispatcher.VEHICLE_STATUS_HEARSE_WAIT)))
                 {
                     if (!StartPathFind(vehicleID, ref data))
                     {
@@ -166,7 +179,7 @@ namespace EnhancedHearseAI
                     {
                         if (Dispatcher._master.ContainsKey(target))
                         {
-                            if (Dispatcher._master[target].Hearse != vehicleID)
+                            if (Dispatcher._master[target].Vehicle != vehicleID)
                                 Dispatcher._master[target] = new Claimant(vehicleID, target);
                         }
                         else if (target != 0)
@@ -176,7 +189,7 @@ namespace EnhancedHearseAI
                 }
             }
 
-            if (hearseStatus == Dispatcher.VEHICLE_STATUS_HEARSE_COLLECT)
+            if (vehicleStatus == Dispatcher.VEHICLE_STATUS_HEARSE_COLLECT)
             {
                 target = current;
                 RemoveTarget(vehicleID, ref Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID]);
@@ -190,7 +203,7 @@ namespace EnhancedHearseAI
                 {
                     if (Dispatcher._master.ContainsKey(target))
                     {
-                        if (Dispatcher._master[target].Hearse != vehicleID)
+                        if (Dispatcher._master[target].Vehicle != vehicleID)
                             Dispatcher._master[target] = new Claimant(vehicleID, target);
                     }
                     else if (target != 0)
