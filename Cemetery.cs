@@ -477,6 +477,9 @@ namespace EnhancedHearseAI
                     }
                 }
 
+                if (_oldtargets.ContainsKey(vehicleID) && _oldtargets[vehicleID].Count > 5 && targetProblematicLevel >= candidateProblematicLevel)
+                    continue;
+
                 if (_master.ContainsKey(id) && _master[id].IsValid && _master[id].IsChallengable)
                 {
                     if (targetProblematicLevel > candidateProblematicLevel)
