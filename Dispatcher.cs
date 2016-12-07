@@ -249,7 +249,7 @@ namespace EnhancedHearseAI
                     if (!_cemeteries.ContainsKey(v.m_sourceBuilding))
                         continue;
 
-                    if ((v.m_flags & Vehicle.Flags.Stopped) != Vehicle.Flags.None)
+                    if (v.m_flags.IsFlagSet(Vehicle.Flags.Stopped))
                     {
                         if (!_stopped.Contains(vehicleID))
                         {
@@ -259,8 +259,10 @@ namespace EnhancedHearseAI
                         continue;
                     }
 
-                    if ((v.m_flags & (Vehicle.Flags.Stopped | Vehicle.Flags.WaitingSpace | Vehicle.Flags.WaitingPath | Vehicle.Flags.WaitingLoading | Vehicle.Flags.WaitingCargo)) != Vehicle.Flags.None) continue;
-                    if ((v.m_flags & (Vehicle.Flags.Spawned)) == Vehicle.Flags.None) continue;
+					if (v.m_flags.IsFlagSet(Vehicle.Flags.Stopped) || v.m_flags.IsFlagSet(Vehicle.Flags.WaitingSpace) || v.m_flags.IsFlagSet(Vehicle.Flags.WaitingPath) || v.m_flags.IsFlagSet(Vehicle.Flags.WaitingLoading) || v.m_flags.IsFlagSet(Vehicle.Flags.WaitingCargo))
+						continue;
+					if (!v.m_flags.IsFlagSet(Vehicle.Flags.Spawned))
+						continue;
                     if (v.m_path == 0u) continue;
 
                     _PathfindCount.Remove(vehicleID);
@@ -269,7 +271,7 @@ namespace EnhancedHearseAI
                     {
                         _stopped.Remove(vehicleID);
                     }
-                    else if ((v.m_flags & (Vehicle.Flags.WaitingTarget)) == Vehicle.Flags.None)
+                    else if (!v.m_flags.IsFlagSet (Vehicle.Flags.WaitingTarget))
                     {
                         uint num3 = vehicleID & 7u;
                         if (num1 != num3 && num2 != num3)
@@ -340,7 +342,7 @@ namespace EnhancedHearseAI
 
             foreach (ushort vehicleID in data.Hearses)
             {
-                if ((Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags & Vehicle.Flags.WaitingPath) != Vehicle.Flags.None)
+                if (Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags.IsFlagSet(Vehicle.Flags.WaitingPath))
                 {
                     PathManager instance = Singleton<PathManager>.instance;
                     byte pathFindFlags = instance.m_pathUnits.m_buffer[(int)((UIntPtr)Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_path)].m_pathFindFlags;
@@ -360,7 +362,7 @@ namespace EnhancedHearseAI
                             _lasttargets.Remove(vehicleID);
                         }
                         else if ((vehicleStatus == VEHICLE_STATUS_HEARSE_WAIT || vehicleStatus == VEHICLE_STATUS_HEARSE_COLLECT)
-                            && ((Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags & (Vehicle.Flags.Spawned)) != Vehicle.Flags.None)
+                            && (Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_flags.IsFlagSet(Vehicle.Flags.Spawned))
                             && _cemeteries.ContainsKey(Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].m_sourceBuilding)
                             && (!_PathfindCount.ContainsKey(vehicleID) || _PathfindCount[vehicleID] < 20))
                         {
@@ -399,13 +401,13 @@ namespace EnhancedHearseAI
 
         public static int GetHearseStatus(ref Vehicle data)
         {
-            if ((data.m_flags & Vehicle.Flags.TransferToSource) != Vehicle.Flags.None)
+            if (data.m_flags.IsFlagSet(Vehicle.Flags.TransferToSource))
             {
-                if ((data.m_flags & (Vehicle.Flags.Stopped | Vehicle.Flags.WaitingTarget)) != Vehicle.Flags.None)
+                if (data.m_flags.IsFlagSet(Vehicle.Flags.Stopped) || data.m_flags.IsFlagSet(Vehicle.Flags.WaitingTarget))
                 {
                     return VEHICLE_STATUS_HEARSE_WAIT;
                 }
-                if ((data.m_flags & Vehicle.Flags.GoingBack) != Vehicle.Flags.None)
+                if (data.m_flags.IsFlagSet(Vehicle.Flags.GoingBack))
                 {
                     return VEHICLE_STATUS_HEARSE_RETURN;
                 }
@@ -414,18 +416,18 @@ namespace EnhancedHearseAI
                     return VEHICLE_STATUS_HEARSE_COLLECT;
                 }
             }
-            else if ((data.m_flags & Vehicle.Flags.TransferToTarget) != Vehicle.Flags.None)
+            else if (data.m_flags.IsFlagSet(Vehicle.Flags.TransferToTarget))
             {
-                if ((data.m_flags & Vehicle.Flags.GoingBack) != Vehicle.Flags.None)
+                if (data.m_flags.IsFlagSet(Vehicle.Flags.GoingBack))
                 {
                     return VEHICLE_STATUS_HEARSE_RETURN;
                 }
-                if ((data.m_flags & Vehicle.Flags.WaitingTarget) != Vehicle.Flags.None)
+                if (data.m_flags.IsFlagSet(Vehicle.Flags.WaitingTarget))
                 {
                     return VEHICLE_STATUS_HEARSE_UNLOAD;
                 }
                 if (data.m_targetBuilding != 0)
-                {;
+                {
                     return VEHICLE_STATUS_HEARSE_TRANSFER;
                 }
             }

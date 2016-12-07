@@ -9,7 +9,7 @@ namespace EnhancedHearseAI
     {
         public void SetTarget(ushort vehicleID, ref Vehicle data, ushort targetBuilding)
         {
-            if ((data.m_flags & (Vehicle.Flags.Spawned)) == Vehicle.Flags.None)
+            if (!data.m_flags.IsFlagSet(Vehicle.Flags.Spawned))
             {
                 if (Identity.ModConf.MinimizeHearses)
                 {
@@ -85,7 +85,7 @@ namespace EnhancedHearseAI
                 }
                 else
                 {
-                    if ((data.m_flags & Vehicle.Flags.TransferToTarget) != Vehicle.Flags.None)
+                    if (data.m_flags.IsFlagSet( Vehicle.Flags.TransferToTarget) )
                     {
                         if (data.m_transferSize > 0)
                         {
@@ -110,7 +110,7 @@ namespace EnhancedHearseAI
                             data.m_flags |= Vehicle.Flags.GoingBack;
                         }
                     }
-                    if ((data.m_flags & Vehicle.Flags.TransferToSource) != Vehicle.Flags.None)
+                    if (data.m_flags.IsFlagSet(Vehicle.Flags.TransferToSource))
                     {
                         VehicleInfo m_info = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].Info;
                         int num = ((HearseAI)m_info.m_vehicleAI).m_corpseCapacity;
@@ -239,11 +239,11 @@ namespace EnhancedHearseAI
         protected bool StartPathFind(ushort vehicleID, ref Vehicle vehicleData)
         {
             VehicleInfo m_info = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].Info;
-            if ((vehicleData.m_flags & Vehicle.Flags.WaitingTarget) != Vehicle.Flags.None)
+            if (vehicleData.m_flags.IsFlagSet(Vehicle.Flags.WaitingTarget))
             {
                 return true;
             }
-            if ((vehicleData.m_flags & Vehicle.Flags.GoingBack) != Vehicle.Flags.None)
+            if (vehicleData.m_flags.IsFlagSet(Vehicle.Flags.GoingBack))
             {
                 if (vehicleData.m_sourceBuilding != 0)
                 {
@@ -277,7 +277,7 @@ namespace EnhancedHearseAI
         protected static bool StartPathFind(ushort vehicleID, ref Vehicle vehicleData, Vector3 startPos, Vector3 endPos, bool startBothWays, bool endBothWays)
         {
             VehicleInfo info = Singleton<VehicleManager>.instance.m_vehicles.m_buffer[vehicleID].Info;
-            bool allowUnderground = (vehicleData.m_flags & (Vehicle.Flags.Underground | Vehicle.Flags.Transition)) != Vehicle.Flags.None;
+			bool allowUnderground = vehicleData.m_flags.IsFlagSet(Vehicle.Flags.Underground) || vehicleData.m_flags.IsFlagSet(Vehicle.Flags.Transition);
             PathUnit.Position startPosA;
             PathUnit.Position startPosB;
             float num;
